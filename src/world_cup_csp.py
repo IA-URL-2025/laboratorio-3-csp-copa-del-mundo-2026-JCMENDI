@@ -29,12 +29,31 @@ class WorldCupCSP:
         Verifica si asignar un equipo a un grupo viola
         las restricciones de confederación o tamaño del grupo.
         """
-        # TODO: implementar restricción de tamaño del grupo (máximo 4)
-        # TODO: implementar restricción de que no puede haber dos equipos del mismo bombo
-        # TODO: implementar restricción de confederaciones (máximo 1, excepto UEFA máximo 2)
+        team_conf = self.teams[team]["conf"]
+        team_pot = self.teams[team]["pot"]
 
-        # Este es un valor de retorno por defecto, debes modificarlo
-        pass
+        # Euipos ya asignados a este grupo
+        teams_in_group = [t for t, g in assignment.items() if g == group]
+
+        # Restriccion de tamaño del grupo (máximo 4)
+        if len(teams_in_group) >= 4:
+            return False
+        
+        # Restriccion de que no puede haber 2 equipos del mismo bombo
+        for t in teams_in_group:
+            if self.teams[t]["pot"] == team_pot:
+                return False
+            
+        # Restricción de confederaciones (máximo 1, excepto UEFA máximo 2)
+        conf_count = sum(1 for t in teams_in_group if self.teams[t]["conf"] == team_conf)
+        if team_conf == "UEFA":
+            if conf_count >= 2:
+                return False
+        else:
+            if conf_count >= 1:
+                return False
+            
+        return True
 
     def forward_check(self, assignment, domains):
         """
@@ -45,10 +64,18 @@ class WorldCupCSP:
         # Hacemos una copia de los dominios actuales para modificarla de forma segura
         new_domains = copy.deepcopy(domains)
 
-        # TODO: implementar forward checking para filtrar grupos inválidos
-        # en los dominios de las variables no asignadas.
-
-        # Este es un valor de retorno por defecto, debes modificarlo
+        # Para cada variable no asignada, eliminar grupos invalidos de su dominio
+        for team in self.variables:
+            if team in assignment:
+                continue
+            new_domains[team] = [
+                g for g in new_domains[team]
+                if self.is_valid_assignment(g, team, assignment)
+            ]
+            if len(new_domains[team]) == 0:
+                if self.debug:
+                    print(f" [FC] Dominio vacio para {team}")
+    
         return True, new_domains
 
     def select_unassigned_variable(self, assignment, domains):
@@ -56,11 +83,12 @@ class WorldCupCSP:
         Heurística MRV (Minimum Remaining Values).
         Selecciona la variable no asignada con el dominio más pequeño.
         """
-        # TODO: implementar MRV
-
-        # Este es un valor de retorno por defecto, debes modificarlo
-        unassigned_vars = [v for v in self.variables if v not in assignment]
-        return unassigned_vars[0] if unassigned_vars else None
+        # Heurística MRV - seleccionar variable no asignada con dominio mas pequeño
+        unassigned = [v for v in self.variables if v not in assignment]
+        if not unassigned:
+            return None
+        return min(unassigned, key=lambda v: len(domains[v]))
+    
 
     def backtrack(self, assignment, domains=None):
         """
@@ -73,12 +101,34 @@ class WorldCupCSP:
         if len(assignment) == len(self.variables):
             return assignment
 
-        # TODO: implementar algoritmo de backtracking
-        # 1. Seleccionar variable con MRV
-        # 2. Iterar sobre sus valores (grupos) posibles en el dominio
-        # 3. Verificar si es válido, hacer la asignación y aplicar forward checking
-        # 4. Llamada recursiva
-        # 5. Deshacer la asignación si falla (backtrack)
+        # Seleccionar variable con MRV
+        team = self.select_unassigned_variable(assignment, domains)
+        if team is None:
+            return None
+        
+        if self.debug:
+            print(f"[BT] Intentando asignar: {team} | Dominio: {domains[team]}")
 
-        # Este es un valor de retorno por defecto, debes modificarlo
+        # Iterar sobre sus valores (grupos) posibles en el dominio
+        for group in domains[team]:
+            # Verificar si es válido, hacer la asignación y aplicar forward checking
+            if self.is_valid_assignment(group, team, assignment):
+                assignment[team] = group
+
+                if self.debug:
+                    print(f" [BT] {team} -> Grupo {group}")
+
+                succes, new_domains = self.forward_check(assignment, domains)
+
+                if succes:
+                    # Llamada recursiva
+                    result = self.backtrack(assignment, new_domains)
+                    if result is not None:
+                        return result
+
+                # Deshacer la asignación si falla (backtrack)
+                if self.debug:
+                    print(f" [BT] Backtrack: deshaciendo {team} -> Grupo {group}")
+                del assignment[team]
+                                
         return None

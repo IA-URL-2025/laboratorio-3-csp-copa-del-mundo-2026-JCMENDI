@@ -75,6 +75,7 @@ class WorldCupCSP:
             if len(new_domains[team]) == 0:
                 if self.debug:
                     print(f" [FC] Dominio vacio para {team}")
+                return False, new_domains
     
         return True, new_domains
 
@@ -130,5 +131,5 @@ class WorldCupCSP:
                 if self.debug:
                     print(f" [BT] Backtrack: deshaciendo {team} -> Grupo {group}")
                 del assignment[team]
-                                
+
         return None
